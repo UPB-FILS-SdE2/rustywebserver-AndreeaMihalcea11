@@ -8,6 +8,7 @@ use std::sync::Arc;
 use std::thread;
 
 fn main() {
+    // Parse command-line arguments
     let args: Vec<String> = env::args().collect();
     if args.len() != 3 {
         eprintln!("Usage: {} PORT ROOT_FOLDER", args[0]);
@@ -21,8 +22,10 @@ fn main() {
             return;
         }
     };
+
     let root_folder = Arc::new(fs::canonicalize(&args[2]).unwrap());
 
+    // Start TCP listener
     let listener = match TcpListener::bind(format!("0.0.0.0:{}", port)) {
         Ok(l) => l,
         Err(e) => {
@@ -34,6 +37,7 @@ fn main() {
     println!("Root folder: {}", root_folder.display());
     println!("Server listening on 0.0.0.0:{}", port);
 
+    // Handle incoming connections
     for stream in listener.incoming() {
         let stream = match stream {
             Ok(s) => s,
@@ -51,6 +55,7 @@ fn main() {
 }
 
 fn handle_connection(mut stream: TcpStream, root_folder: &Arc<PathBuf>) {
+    // Read request from stream
     let mut buffer = [0; 8192];
     if let Err(e) = stream.read(&mut buffer) {
         eprintln!("Failed to read from connection: {}", e);
@@ -60,12 +65,14 @@ fn handle_connection(mut stream: TcpStream, root_folder: &Arc<PathBuf>) {
     let request = String::from_utf8_lossy(&buffer[..]);
     let (method, path) = parse_request(&request);
 
+    // Handle request based on method
     let response = match method {
         "GET" => handle_get_request(&path, root_folder),
         "POST" => handle_post_request(&request, root_folder),
         _ => format!("HTTP/1.1 405 Method Not Allowed\r\n\r\n"),
     };
 
+    // Write response to stream
     if let Err(e) = stream.write(response.as_bytes()) {
         eprintln!("Failed to write response: {}", e);
     }
@@ -90,6 +97,7 @@ fn parse_request(request: &str) -> (&str, &str) {
 }
 
 fn handle_get_request(path: &str, root_folder: &Arc<PathBuf>) -> String {
+    // Construct full path
     let path = root_folder.join(&path[1..]);
 
     // Check if requested path exists
@@ -102,7 +110,7 @@ fn handle_get_request(path: &str, root_folder: &Arc<PathBuf>) -> String {
         return format!("HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n");
     }
 
-    // Handle different content types based on file extension
+    // Determine content type based on file extension
     let content_type = match path.extension().and_then(|e| e.to_str()) {
         Some("html") => "text/html; charset=utf-8",
         Some("css") => "text/css; charset=utf-8",
@@ -113,12 +121,13 @@ fn handle_get_request(path: &str, root_folder: &Arc<PathBuf>) -> String {
         _ => "application/octet-stream",
     };
 
-    // Read file contents and generate HTTP response
-    match fs::read_to_string(&path) {
+    // Read file contents
+    match fs::read(&path) {
         Ok(contents) => {
             format!(
                 "HTTP/1.1 200 OK\r\nContent-type: {}\r\nConnection: close\r\n\r\n{}",
-                content_type, contents
+                content_type,
+                String::from_utf8_lossy(&contents)
             )
         }
         Err(_) => {
@@ -138,7 +147,7 @@ fn handle_post_request(request: &str, root_folder: &Arc<PathBuf>) -> String {
     }
 
     // Check if requested path is within root_folder/scripts
-    if !path.starts_with(root_folder) || !path.starts_with(root_folder.join("scripts")) {
+    if !path.starts_with(root_folder.join("scripts")) {
         return format!("HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n");
     }
 
