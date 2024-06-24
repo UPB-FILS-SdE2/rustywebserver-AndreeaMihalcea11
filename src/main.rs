@@ -38,10 +38,12 @@ fn handle_connection(mut stream: TcpStream, root_folder: &Path) {
     let request = String::from_utf8_lossy(&buffer[..]);
     let (method, path) = parse_request(&request);
 
-    let response = match method {
-        "GET" => handle_get_request(&path, root_folder),
-        "POST" => handle_post_request(&request, root_folder),
-        _ => format!("HTTP/1.1 405 Method Not Allowed\r\n\r\n"),
+    let response = if method == "GET" {
+        handle_get_request(&path, root_folder)
+    } else if method == "POST" {
+        handle_post_request(&request, root_folder)
+    } else {
+        format!("HTTP/1.1 405 Method Not Allowed\r\n\r\n")
     };
 
     stream.write(response.as_bytes()).unwrap();
@@ -77,14 +79,18 @@ fn handle_get_request(path: &str, root_folder: &Path) -> String {
         return format!("HTTP/1.1 500 Internal Server Error\r\nConnection: close\r\n\r\n");
     });
 
-    let content_type = match path.extension().and_then(|e| e.to_str()) {
-        Some("html") => "text/html; charset=utf-8",
-        Some("css") => "text/css; charset=utf-8",
-        Some("js") => "text/javascript; charset=utf-8",
-        Some("png") => "image/png",
-        Some("jpeg") | Some("jpg") => "image/jpeg",
-        Some("zip") => "application/zip",
-        _ => "application/octet-stream",
+    let content_type = if path.extension().is_some() {
+        match path.extension().unwrap().to_str().unwrap() {
+            "html" => "text/html; charset=utf-8",
+            "css" => "text/css; charset=utf-8",
+            "js" => "text/javascript; charset=utf-8",
+            "png" => "image/png",
+            "jpeg" | "jpg" => "image/jpeg",
+            "zip" => "application/zip",
+            _ => "application/octet-stream",
+        }
+    } else {
+        "application/octet-stream"
     };
 
     format!(
