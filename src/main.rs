@@ -2,51 +2,28 @@ use std::env;
 use std::fs;
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::{Command, Stdio};
 use std::sync::Arc;
 use std::thread;
 
 fn main() {
-    // Parse command-line arguments
     let args: Vec<String> = env::args().collect();
     if args.len() != 3 {
         eprintln!("Usage: {} PORT ROOT_FOLDER", args[0]);
         return;
     }
 
-    let port = match args[1].parse::<u16>() {
-        Ok(p) => p,
-        Err(_) => {
-            eprintln!("Invalid port number");
-            return;
-        }
-    };
-
-    let root_folder = Arc::new(fs::canonicalize(&args[2]).unwrap());
-
-    // Start TCP listener
-    let listener = match TcpListener::bind(format!("0.0.0.0:{}", port)) {
-        Ok(l) => l,
-        Err(e) => {
-            eprintln!("Failed to bind to port {}: {}", port, e);
-            return;
-        }
-    };
+    let port = &args[1];
+    let root_folder = &args[2];
+    let listener = TcpListener::bind(format!("0.0.0.0:{}", port)).unwrap();
+    let root_folder = Arc::new(fs::canonicalize(root_folder).unwrap());
 
     println!("Root folder: {}", root_folder.display());
     println!("Server listening on 0.0.0.0:{}", port);
 
-    // Handle incoming connections
     for stream in listener.incoming() {
-        let stream = match stream {
-            Ok(s) => s,
-            Err(e) => {
-                eprintln!("Failed to accept incoming connection: {}", e);
-                continue;
-            }
-        };
-
+        let stream = stream.unwrap();
         let root_folder = Arc::clone(&root_folder);
         thread::spawn(move || {
             handle_connection(stream, &root_folder);
@@ -54,31 +31,21 @@ fn main() {
     }
 }
 
-fn handle_connection(mut stream: TcpStream, root_folder: &Arc<PathBuf>) {
-    // Read request from stream
+fn handle_connection(mut stream: TcpStream, root_folder: &Path) {
     let mut buffer = [0; 8192];
-    if let Err(e) = stream.read(&mut buffer) {
-        eprintln!("Failed to read from connection: {}", e);
-        return;
-    };
+    let _ = stream.read(&mut buffer);
 
     let request = String::from_utf8_lossy(&buffer[..]);
     let (method, path) = parse_request(&request);
 
-    // Handle request based on method
     let response = match method {
         "GET" => handle_get_request(&path, root_folder),
         "POST" => handle_post_request(&request, root_folder),
         _ => format!("HTTP/1.1 405 Method Not Allowed\r\n\r\n"),
     };
 
-    // Write response to stream
-    if let Err(e) = stream.write(response.as_bytes()) {
-        eprintln!("Failed to write response: {}", e);
-    }
-    if let Err(e) = stream.flush() {
-        eprintln!("Failed to flush stream: {}", e);
-    }
+    stream.write(response.as_bytes()).unwrap();
+    stream.flush().unwrap();
 }
 
 fn parse_request(request: &str) -> (&str, &str) {
@@ -96,21 +63,20 @@ fn parse_request(request: &str) -> (&str, &str) {
     (parts[0], parts[1])
 }
 
-fn handle_get_request(path: &str, root_folder: &Arc<PathBuf>) -> String {
-    // Construct full path
+fn handle_get_request(path: &str, root_folder: &Path) -> String {
     let path = root_folder.join(&path[1..]);
-
-    // Check if requested path exists
     if !path.exists() {
         return format!("HTTP/1.1 404 Not Found\r\nConnection: close\r\n\r\n");
     }
 
-    // Check if requested path is within root_folder
     if !path.starts_with(root_folder) {
         return format!("HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n");
     }
 
-    // Determine content type based on file extension
+    let contents = fs::read_to_string(&path).unwrap_or_else(|_| {
+        return format!("HTTP/1.1 500 Internal Server Error\r\nConnection: close\r\n\r\n");
+    });
+
     let content_type = match path.extension().and_then(|e| e.to_str()) {
         Some("html") => "text/html; charset=utf-8",
         Some("css") => "text/css; charset=utf-8",
@@ -121,47 +87,54 @@ fn handle_get_request(path: &str, root_folder: &Arc<PathBuf>) -> String {
         _ => "application/octet-stream",
     };
 
-    // Read file contents
-    match fs::read(&path) {
-        Ok(contents) => {
-            format!(
-                "HTTP/1.1 200 OK\r\nContent-type: {}\r\nConnection: close\r\n\r\n{}",
-                content_type,
-                String::from_utf8_lossy(&contents)
-            )
-        }
-        Err(_) => {
-            format!("HTTP/1.1 500 Internal Server Error\r\nConnection: close\r\n\r\n")
-        }
-    }
+    format!(
+        "HTTP/1.1 200 OK\r\nContent-type: {}\r\nConnection: close\r\n\r\n{}",
+        content_type, contents
+    )
 }
 
-fn handle_post_request(request: &str, root_folder: &Arc<PathBuf>) -> String {
+fn handle_post_request(request: &str, root_folder: &Path) -> String {
     let lines: Vec<&str> = request.lines().collect();
     let path = lines[0].split_whitespace().nth(1).unwrap();
     let path = root_folder.join(&path[1..]);
-
-    // Check if requested path exists
     if !path.exists() {
         return format!("HTTP/1.1 404 Not Found\r\nConnection: close\r\n\r\n");
     }
 
-    // Check if requested path is within root_folder/scripts
-    if !path.starts_with(root_folder.join("scripts")) {
+    if !path.starts_with(root_folder) || !path.starts_with(root_folder.join("scripts")) {
         return format!("HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n");
     }
 
-    // Execute script and capture output
-    match Command::new(&path).stdout(Stdio::piped()).output() {
+    let output = Command::new(path)
+        .envs(parse_headers_as_env_vars(request))
+        .output();
+
+    match output {
         Ok(output) => {
-            let stdout = String::from_utf8_lossy(&output.stdout);
-            format!(
-                "HTTP/1.1 200 OK\r\nContent-type: text/plain\r\nConnection: close\r\n\r\n{}",
-                stdout
-            )
+            if output.status.success() {
+                format!(
+                    "HTTP/1.1 200 OK\r\nConnection: close\r\n\r\n{}",
+                    String::from_utf8_lossy(&output.stdout)
+                )
+            } else {
+                format!(
+                    "HTTP/1.1 500 Internal Server Error\r\nConnection: close\r\n\r\n{}",
+                    String::from_utf8_lossy(&output.stderr)
+                )
+            }
         }
-        Err(_) => {
-            format!("HTTP/1.1 500 Internal Server Error\r\nConnection: close\r\n\r\n")
-        }
+        Err(_) => format!("HTTP/1.1 500 Internal Server Error\r\nConnection: close\r\n\r\n"),
     }
+}
+
+fn parse_headers_as_env_vars(request: &str) -> Vec<(&str, &str)> {
+    request
+        .lines()
+        .skip(1)
+        .take_while(|line| !line.is_empty())
+        .map(|line| {
+            let parts: Vec<&str> = line.splitn(2, ':').collect();
+            (parts[0].trim(), parts[1].trim())
+        })
+        .collect()
 }
