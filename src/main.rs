@@ -2,7 +2,7 @@ use std::env;
 use std::fs;
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::{Command, Stdio};
 use std::sync::Arc;
 use std::thread;
@@ -75,10 +75,6 @@ fn handle_get_request(path: &str, root_folder: &Path) -> String {
         return format!("HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n");
     }
 
-    if path.is_dir() {
-        return generate_directory_listing(&path, &path.strip_prefix(root_folder).unwrap().to_string_lossy());
-    }
-
     let contents = fs::read_to_string(&path).unwrap_or_else(|_| {
         return format!("HTTP/1.1 500 Internal Server Error\r\nConnection: close\r\n\r\n");
     });
@@ -147,27 +143,4 @@ fn parse_headers_as_env_vars(request: &str) -> Vec<(&str, &str)> {
             (parts[0].trim(), parts[1].trim())
         })
         .collect()
-}
-
-fn generate_directory_listing(path: &Path, relative_path: &str) -> String {
-    let mut listing = format!(
-        "<html>\n<h1>Index of {}</h1>\n<ul>\n",
-        relative_path
-    );
-
-    for entry in fs::read_dir(path).unwrap() {
-        let entry = entry.unwrap();
-        let file_name = entry.file_name();
-        let file_name = file_name.to_string_lossy();
-        listing.push_str(&format!(
-            "<li><a href=\"{}/{}\">{}</a></li>\n",
-            relative_path, file_name, file_name
-        ));
-    }
-
-    listing.push_str("</ul>\n</html>");
-    format!(
-        "HTTP/1.1 200 OK\r\nContent-type: text/html; charset=utf-8\r\nConnection: close\r\n\r\n{}",
-        listing
-    )
 }
