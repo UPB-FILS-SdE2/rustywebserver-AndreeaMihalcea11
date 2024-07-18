@@ -1,0 +1,278 @@
+name: Autograding Tests
+'on':
+- push
+- repository_dispatch
+permissions:
+  checks: write
+  actions: read
+  contents: read
+jobs:
+  run-autograding-tests:
+    runs-on: ubuntu-latest
+    if: github.actor != 'github-classroom[bot]'
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    - name: install
+      id: install
+      uses: classroom-resources/autograding-command-grader@v1
+      with:
+        test-name: install
+        setup-command: ''
+        command: cargo install --path .
+        timeout: 10
+    - name: setup
+      id: setup
+      uses: classroom-resources/autograding-command-grader@v1
+      with:
+        test-name: setup
+        setup-command: git clone https://github.com/UPB-FILS-SdE2/rustywebserver-tests.git
+        command: cd rustywebserver-tests && npm install
+        timeout: 10
+    - name: text
+      id: text
+      uses: classroom-resources/autograding-command-grader@v1
+      with:
+        test-name: text
+        setup-command: ''
+        command: cd rustywebserver-tests && ./run.sh single ./1-static/0-text.js
+        timeout: 5
+        max-score: 3
+    - name: html
+      id: html
+      uses: classroom-resources/autograding-command-grader@v1
+      with:
+        test-name: html
+        setup-command: ''
+        command: cd rustywebserver-tests && ./run.sh single ./1-static/1-html.js
+        timeout: 10
+        max-score: 3
+    - name: jpeg
+      id: jpeg
+      uses: classroom-resources/autograding-command-grader@v1
+      with:
+        test-name: jpeg
+        setup-command: ''
+        command: cd rustywebserver-tests && ./run.sh single ./1-static/2-jpeg.js
+        timeout: 10
+        max-score: 3
+    - name: pmg
+      id: pmg
+      uses: classroom-resources/autograding-command-grader@v1
+      with:
+        test-name: pmg
+        setup-command: ''
+        command: cd rustywebserver-tests && ./run.sh single ./1-static/3-png.js
+        timeout: 10
+        max-score: 3
+    - name: zip
+      id: zip
+      uses: classroom-resources/autograding-command-grader@v1
+      with:
+        test-name: zip
+        setup-command: ''
+        command: cd rustywebserver-tests && ./run.sh single ./1-static/4-zip.js
+        timeout: 10
+        max-score: 3
+    - name: stream
+      id: stream
+      uses: classroom-resources/autograding-command-grader@v1
+      with:
+        test-name: stream
+        setup-command: ''
+        command: cd rustywebserver-tests && ./run.sh single ./1-static/5-stream.js
+        timeout: 10
+        max-score: 3
+    - name: forbidden
+      id: forbidden
+      uses: classroom-resources/autograding-command-grader@v1
+      with:
+        test-name: forbidden
+        setup-command: ''
+        command: cd rustywebserver-tests && ./run.sh single ./1-static/6-forbidden.js
+        timeout: 10
+        max-score: 3
+    - name: not found
+      id: not-found
+      uses: classroom-resources/autograding-command-grader@v1
+      with:
+        test-name: not found
+        setup-command: ''
+        command: cd rustywebserver-tests && ./run.sh single ./1-static/7-not-found.js
+        timeout: 10
+        max-score: 3
+    - name: path
+      id: path
+      uses: classroom-resources/autograding-command-grader@v1
+      with:
+        test-name: path
+        setup-command: ''
+        command: cd rustywebserver-tests && ./run.sh single ./1-static/8-path.js
+        timeout: 10
+        max-score: 3
+    - name: secret
+      id: secret
+      uses: classroom-resources/autograding-command-grader@v1
+      with:
+        test-name: secret
+        setup-command: ''
+        command: cd rustywebserver-tests && ./run.sh single ./1-static/9-secret.js
+        timeout: 10
+        max-score: 3
+    - name: get simple
+      id: get-simple
+      uses: classroom-resources/autograding-command-grader@v1
+      with:
+        test-name: get simple
+        setup-command: ''
+        command: cd rustywebserver-tests && ./run.sh single ./2-get/0-get-simple.js
+        timeout: 10
+        max-score: 3
+    - name: get env
+      id: get-env
+      uses: classroom-resources/autograding-command-grader@v1
+      with:
+        test-name: get env
+        setup-command: ''
+        command: cd rustywebserver-tests && ./run.sh single ./2-get/1-get-env.js
+        timeout: 10
+        max-score: 3
+    - name: get fail
+      id: get-fail
+      uses: classroom-resources/autograding-command-grader@v1
+      with:
+        test-name: get fail
+        setup-command: ''
+        command: cd rustywebserver-tests && ./run.sh single ./2-get/2-get-fail.js
+        timeout: 10
+        max-score: 3
+    - name: get query
+      id: get-query
+      uses: classroom-resources/autograding-command-grader@v1
+      with:
+        test-name: get query
+        setup-command: ''
+        command: cd rustywebserver-tests && ./run.sh single ./2-get/3-get-query.js
+        timeout: 10
+        max-score: 3
+    - name: get method
+      id: get-method
+      uses: classroom-resources/autograding-command-grader@v1
+      with:
+        test-name: get method
+        setup-command: ''
+        command: cd rustywebserver-tests && ./run.sh single ./2-get/4-get-method.js
+        timeout: 10
+        max-score: 3
+    - name: get request
+      id: get-request
+      uses: classroom-resources/autograding-command-grader@v1
+      with:
+        test-name: get request
+        setup-command: ''
+        command: cd rustywebserver-tests && ./run.sh single ./2-get/5-get-request.js
+        timeout: 10
+        max-score: 3
+    - name: post request
+      id: post-request
+      uses: classroom-resources/autograding-command-grader@v1
+      with:
+        test-name: post request
+        setup-command: ''
+        command: cd rustywebserver-tests && ./run.sh single ./3-post/0-post-request.js
+        timeout: 10
+        max-score: 3
+    - name: post msg
+      id: post-msg
+      uses: classroom-resources/autograding-command-grader@v1
+      with:
+        test-name: post msg
+        setup-command: ''
+        command: cd rustywebserver-tests && ./run.sh single ./3-post/1-post-msg.js
+        timeout: 10
+        max-score: 3
+    - name: post query msg
+      id: post-query-msg
+      uses: classroom-resources/autograding-command-grader@v1
+      with:
+        test-name: post query msg
+        setup-command: ''
+        command: cd rustywebserver-tests && ./run.sh single ./3-post/2-post-query-msg.js
+        timeout: 10
+        max-score: 3
+    - name: post fail
+      id: post-fail
+      uses: classroom-resources/autograding-command-grader@v1
+      with:
+        test-name: post fail
+        setup-command: ''
+        command: cd rustywebserver-tests && ./run.sh single ./3-post/3-post-fail.js
+        timeout: 10
+        max-score: 3
+    - name: post multiple
+      id: post-multiple
+      uses: classroom-resources/autograding-command-grader@v1
+      with:
+        test-name: post multiple
+        setup-command: ''
+        command: cd rustywebserver-tests && ./run.sh single ./3-post/4-post-multiple.js
+        timeout: 10
+        max-score: 3
+    - name: static folder
+      id: static-folder
+      uses: classroom-resources/autograding-command-grader@v1
+      with:
+        test-name: static folder
+        setup-command: ''
+        command: cd rustywebserver-tests && ./run.sh folder ./1-static
+        timeout: 10
+        max-score: 15
+    - name: folder get
+      id: folder-get
+      uses: classroom-resources/autograding-command-grader@v1
+      with:
+        test-name: folder get
+        setup-command: ''
+        command: cd rustywebserver-tests && ./run.sh folder ./2-get
+        timeout: 10
+        max-score: 11
+    - name: folder post
+      id: folder-post
+      uses: classroom-resources/autograding-command-grader@v1
+      with:
+        test-name: folder post
+        setup-command: ''
+        command: cd rustywebserver-tests && ./run.sh folder ./3-post
+        timeout: 10
+        max-score: 11
+    - name: Autograding Reporter
+      uses: classroom-resources/autograding-grading-reporter@v1
+      env:
+        INSTALL_RESULTS: "${{steps.install.outputs.result}}"
+        SETUP_RESULTS: "${{steps.setup.outputs.result}}"
+        TEXT_RESULTS: "${{steps.text.outputs.result}}"
+        HTML_RESULTS: "${{steps.html.outputs.result}}"
+        JPEG_RESULTS: "${{steps.jpeg.outputs.result}}"
+        PMG_RESULTS: "${{steps.pmg.outputs.result}}"
+        ZIP_RESULTS: "${{steps.zip.outputs.result}}"
+        STREAM_RESULTS: "${{steps.stream.outputs.result}}"
+        FORBIDDEN_RESULTS: "${{steps.forbidden.outputs.result}}"
+        NOT-FOUND_RESULTS: "${{steps.not-found.outputs.result}}"
+        PATH_RESULTS: "${{steps.path.outputs.result}}"
+        SECRET_RESULTS: "${{steps.secret.outputs.result}}"
+        GET-SIMPLE_RESULTS: "${{steps.get-simple.outputs.result}}"
+        GET-ENV_RESULTS: "${{steps.get-env.outputs.result}}"
+        GET-FAIL_RESULTS: "${{steps.get-fail.outputs.result}}"
+        GET-QUERY_RESULTS: "${{steps.get-query.outputs.result}}"
+        GET-METHOD_RESULTS: "${{steps.get-method.outputs.result}}"
+        GET-REQUEST_RESULTS: "${{steps.get-request.outputs.result}}"
+        POST-REQUEST_RESULTS: "${{steps.post-request.outputs.result}}"
+        POST-MSG_RESULTS: "${{steps.post-msg.outputs.result}}"
+        POST-QUERY-MSG_RESULTS: "${{steps.post-query-msg.outputs.result}}"
+        POST-FAIL_RESULTS: "${{steps.post-fail.outputs.result}}"
+        POST-MULTIPLE_RESULTS: "${{steps.post-multiple.outputs.result}}"
+        STATIC-FOLDER_RESULTS: "${{steps.static-folder.outputs.result}}"
+        FOLDER-GET_RESULTS: "${{steps.folder-get.outputs.result}}"
+        FOLDER-POST_RESULTS: "${{steps.folder-post.outputs.result}}"
+      with:
+        runners: install,setup,text,html,jpeg,pmg,zip,stream,forbidden,not-found,path,secret,get-simple,get-env,get-fail,get-query,get-method,get-request,post-request,post-msg,post-query-msg,post-fail,post-multiple,static-folder,folder-get,folder-post
