@@ -2,7 +2,7 @@ use std::env;
 use std::fs;
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::Arc;
 use std::thread;
@@ -41,7 +41,7 @@ fn handle_connection(mut stream: TcpStream, root_folder: &Path) {
     let response = if method == "GET" {
         handle_get_request(&path, root_folder)
     } else if method == "POST" {
-        handle_post_request(&request, root_folder)
+        handle_post_request(&request, &path, root_folder)
     } else {
         format!("HTTP/1.1 405 Method Not Allowed\r\n\r\n")
     };
@@ -76,19 +76,11 @@ fn handle_get_request(path: &str, root_folder: &Path) -> String {
     }
 
     let contents = match fs::read(&path) {
-        Ok(contents) => contents,
+        Ok(content) => content,
         Err(_) => return format!("HTTP/1.1 500 Internal Server Error\r\nConnection: close\r\n\r\n"),
     };
 
-    let content_type = match path.extension().and_then(|ext| ext.to_str()) {
-        Some("html") => "text/html; charset=utf-8",
-        Some("css") => "text/css; charset=utf-8",
-        Some("js") => "text/javascript; charset=utf-8",
-        Some("png") => "image/png",
-        Some("jpeg") | Some("jpg") => "image/jpeg",
-        Some("zip") => "application/zip",
-        _ => "application/octet-stream",
-    };
+    let content_type = determine_content_type(&path);
 
     format!(
         "HTTP/1.1 200 OK\r\nContent-type: {}\r\nConnection: close\r\n\r\n{}",
@@ -97,9 +89,7 @@ fn handle_get_request(path: &str, root_folder: &Path) -> String {
     )
 }
 
-fn handle_post_request(request: &str, root_folder: &Path) -> String {
-    let lines: Vec<&str> = request.lines().collect();
-    let path = lines[0].split_whitespace().nth(1).unwrap();
+fn handle_post_request(request: &str, path: &str, root_folder: &Path) -> String {
     let path = root_folder.join(&path[1..]);
     if !path.exists() {
         return format!("HTTP/1.1 404 Not Found\r\nConnection: close\r\n\r\n");
@@ -109,8 +99,9 @@ fn handle_post_request(request: &str, root_folder: &Path) -> String {
         return format!("HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n");
     }
 
+    let headers_as_env = parse_headers_as_env_vars(request);
     let output = Command::new(&path)
-        .envs(parse_headers_as_env_vars(request))
+        .envs(headers_as_env)
         .stdin(Stdio::piped())
         .output();
 
@@ -137,9 +128,21 @@ fn parse_headers_as_env_vars(request: &str) -> Vec<(&str, &str)> {
         .lines()
         .skip(1)
         .take_while(|line| !line.is_empty())
-        .filter_map(|line| {
-            let mut parts = line.splitn(2, ':');
-            Some((parts.next()?.trim(), parts.next()?.trim()))
+        .map(|line| {
+            let parts: Vec<&str> = line.splitn(2, ':').collect();
+            (parts[0].trim(), parts[1].trim())
         })
         .collect()
+}
+
+fn determine_content_type(path: &Path) -> &str {
+    match path.extension().and_then(|ext| ext.to_str()) {
+        Some("html") => "text/html; charset=utf-8",
+        Some("css") => "text/css; charset=utf-8",
+        Some("js") => "text/javascript; charset=utf-8",
+        Some("png") => "image/png",
+        Some("jpeg") | Some("jpg") => "image/jpeg",
+        Some("zip") => "application/zip",
+        _ => "application/octet-stream",
+    }
 }
