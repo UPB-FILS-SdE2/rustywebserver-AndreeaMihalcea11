@@ -75,27 +75,25 @@ fn handle_get_request(path: &str, root_folder: &Path) -> String {
         return format!("HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n");
     }
 
-    let contents = fs::read_to_string(&path).unwrap_or_else(|_| {
-        return format!("HTTP/1.1 500 Internal Server Error\r\nConnection: close\r\n\r\n");
-    });
+    let contents = match fs::read(&path) {
+        Ok(contents) => contents,
+        Err(_) => return format!("HTTP/1.1 500 Internal Server Error\r\nConnection: close\r\n\r\n"),
+    };
 
-    let content_type = if path.extension().is_some() {
-        match path.extension().unwrap().to_str().unwrap() {
-            "html" => "text/html; charset=utf-8",
-            "css" => "text/css; charset=utf-8",
-            "js" => "text/javascript; charset=utf-8",
-            "png" => "image/png",
-            "jpeg" | "jpg" => "image/jpeg",
-            "zip" => "application/zip",
-            _ => "application/octet-stream",
-        }
-    } else {
-        "application/octet-stream"
+    let content_type = match path.extension().and_then(|ext| ext.to_str()) {
+        Some("html") => "text/html; charset=utf-8",
+        Some("css") => "text/css; charset=utf-8",
+        Some("js") => "text/javascript; charset=utf-8",
+        Some("png") => "image/png",
+        Some("jpeg") | Some("jpg") => "image/jpeg",
+        Some("zip") => "application/zip",
+        _ => "application/octet-stream",
     };
 
     format!(
         "HTTP/1.1 200 OK\r\nContent-type: {}\r\nConnection: close\r\n\r\n{}",
-        content_type, contents
+        content_type,
+        String::from_utf8_lossy(&contents)
     )
 }
 
@@ -111,8 +109,9 @@ fn handle_post_request(request: &str, root_folder: &Path) -> String {
         return format!("HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n");
     }
 
-    let output = Command::new(path)
+    let output = Command::new(&path)
         .envs(parse_headers_as_env_vars(request))
+        .stdin(Stdio::piped())
         .output();
 
     match output {
@@ -138,9 +137,9 @@ fn parse_headers_as_env_vars(request: &str) -> Vec<(&str, &str)> {
         .lines()
         .skip(1)
         .take_while(|line| !line.is_empty())
-        .map(|line| {
-            let parts: Vec<&str> = line.splitn(2, ':').collect();
-            (parts[0].trim(), parts[1].trim())
+        .filter_map(|line| {
+            let mut parts = line.splitn(2, ':');
+            Some((parts.next()?.trim(), parts.next()?.trim()))
         })
         .collect()
 }
